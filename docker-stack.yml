@@ -1,0 +1,116 @@
+version: '3.8'
+
+services:
+  course-app:
+    image: course-app:latest
+    # Для production використовуйте build з registry
+    # image: registry.example.com/course-app:latest
+    ports:
+      - target: 8080
+        published: 8080
+        protocol: tcp
+        mode: ingress
+    environment:
+      - APP_MESSAGE=Welcome to the Course App (Swarm Mode)
+      - APP_STORE=redis
+      - APP_REDIS_URL=redis://redis:6379/0
+      - APP_DB_PATH=/app/data/data.sql
+    volumes:
+      - appdata:/app/data
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+      rollback_config:
+        parallelism: 1
+        delay: 0s
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      placement:
+        constraints:
+          - node.role == worker
+        preferences:
+          - spread: node.labels.zone
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+      labels:
+        - "com.example.service=course-app"
+        - "com.example.version=1.0"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - course-app-network
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - target: 6379
+        published: 6379
+        protocol: tcp
+        mode: ingress
+    volumes:
+      - redis-data:/data
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+      rollback_config:
+        parallelism: 1
+        delay: 0s
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+      labels:
+        - "com.example.service=redis"
+        - "com.example.version=7"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    command: redis-server --appendonly yes
+    networks:
+      - course-app-network
+
+volumes:
+  redis-data:
+    driver: local
+  appdata:
+    driver: local
+
+networks:
+  course-app-network:
+    driver: overlay
+    attachable: true
+

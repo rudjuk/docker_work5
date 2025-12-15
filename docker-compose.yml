@@ -10,8 +10,12 @@ services:
       - APP_MESSAGE=Welcome to the Course App
       - APP_STORE=redis
       - APP_REDIS_URL=redis://redis:6379/0
+      - APP_DB_PATH=/app/data/data.sql
+    volumes:
+      - appdata:/app/data
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz').read()"]
@@ -33,7 +37,11 @@ services:
       interval: 10s
       timeout: 3s
       retries: 3
+      start_period: 5s
 
 volumes:
   redis-data:
+    driver: local
+  appdata:
+    driver: local
 
